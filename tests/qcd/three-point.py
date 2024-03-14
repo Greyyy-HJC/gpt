@@ -48,7 +48,7 @@ dst = g.mspincolor(grid)
 dst @= propagator * src
 
 # momentum
-p = 2.0 * np.pi * np.array([1, 0, 0, 0]) / L
+p = 2.0 * np.pi * np.array([1, 0, 0, 0]) / L #?: this is a momentum in x-direction, right?
 P = g.exp_ixp(p)
 
 # operators
