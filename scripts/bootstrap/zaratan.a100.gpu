@@ -1,0 +1,105 @@
+#!/bin/bash
+
+#! Needs to be checked.
+
+#
+# Check packages
+#
+function check_package {
+	dpkg -s $1 1>/dev/null 2>/dev/null
+	if [[ "$?" != "0" ]]; then
+		echo "Package $1 needs to be installed first"
+		exit 1
+	fi
+}
+
+module load gcc/9.4.0
+module load fftw/3.3.10/gcc/9.4.0
+module load openmpi/4.1.1
+module load cuda/11.6.2
+
+#
+# Install python3 if it is not yet there
+#
+
+echo "Checking numpy"
+hasNumpy=$(python3 -c "import numpy" 2>&1 | grep -c ModuleNotFound)
+if [[ "$hasNumpy" == "1" ]]; then
+	echo "Install numpy"
+	python3 -m pip install --user numpy
+fi
+
+#
+# Get root directory
+#
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." >/dev/null 2>&1 && pwd)"
+#
+# Precompile python
+#
+echo "Compile gpt"
+python3 -m compileall ${root}/lib/gpt
+
+#
+# Create dependencies and download
+#
+dep=${root}/dependencies
+mkdir -p ${dep}
+cd ${dep}
+#
+#	#
+#	# Lime
+#	#
+wget https://github.com/usqcd-software/c-lime/tarball/master
+tar xzf master
+mv usqcd-software-c-lime* lime
+rm -f master
+cd lime
+./autogen.sh
+./configure
+make
+cd ..
+#
+#	#
+#	# Grid
+#	#
+git clone https://github.com/dbollweg/Grid.git
+cd Grid
+git checkout gpt_proton
+./bootstrap.sh
+
+mkdir build
+cd build
+
+../configure \
+	--enable-unified=no \
+	--enable-accelerator=cuda \
+	--enable-alloc-align=4k \
+	--enable-accelerator-cshift \
+	--enable-shm=nvlink \
+	--enable-gparity=no \
+	--enable-comms=mpi-auto \
+	--disable-comms-threads \
+	--with-lime=${dep}/lime \
+	--with-fftw=/sw/spack/delta-2022-03/apps/fftw/3.3.10-gcc-11.2.0-ipxfmko/lib \
+	--enable-simd=GPU \
+	MPICXX=mpicxx \
+	CXX=nvcc \
+	CXXFLAGS="-ccbin g++ -gencode arch=compute_80,code=sm_80 -std=c++14 --cudart shared --compiler-options -fPIC" \
+	LDFLAGS="--cudart shared --compiler-options -fopenmp" \
+	LIBS="-lrt -lmpi"
+cd Grid
+make -j 4
+#fi
+
+#if [ ! -f ${root}/lib/cgpt/build/cgpt.so ];
+#then
+#
+# cgpt
+#
+echo "now the cgpt dep------------------------------"
+cd ${root}/lib/cgpt
+./make ${root}/dependencies/Grid/build 4
+#fi
+
+echo "To use:"
+echo "source ${root}/lib/cgpt/build/source.sh"
