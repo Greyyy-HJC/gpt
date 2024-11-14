@@ -51,36 +51,39 @@ then
         rm -f master
         cd lime
         ./autogen.sh
-        CC=gcc ./configure
-        make -j 16
+        ./configure CFLAGS="-fPIC" CXXFLAGS="-fPIC"
+        make
         cd ..
 
         #
         # Grid
         #
-        git clone https://github.com/lehner/Grid.git
+
+        # Use EBROOTFFTW as FFTW root
+        FFTW_ROOT=${EBROOTFFTW}
+
+        git clone https://github.com/dbollweg/Grid.git
         cd Grid
-        git checkout feature/gpt
+        git checkout gpt_proton
         ./bootstrap.sh
         mkdir build
         cd build
-	../configure \
-                --enable-unified=no \
-                --enable-accelerator=cuda \
-                --enable-alloc-align=4k \
-                --enable-accelerator-cshift \
-                --enable-shm=nvlink \
-                --enable-comms=none \
-                --disable-comms-threads \
-                --enable-simd=GPU \
-                --with-fftw=/usr/include \
-                CXX=nvcc \
-                CXXFLAGS="-ccbin g++ -gencode arch=compute_80,code=sm_80 -std=c++17 --cudart shared --compiler-options=-fPIC -lcublas" \
-                LIBS="-lrt" \
-                LDFLAGS="--cudart shared --compiler-options -fopenmp -lcublas"
+        ../configure --enable-comms=mpi-auto \
+             --enable-unified=no \
+             --enable-accelerator=cuda \
+             --enable-alloc-align=4k \
+             --enable-shm=nvlink \
+             --enable-simd=GPU \
+             --with-fftw=$FFTW_ROOT \
+             --with-lime=${dep}/lime \
+             CXX=nvcc \
+             MPICXX=mpicxx \
+             CXXFLAGS="-ccbin g++ -gencode arch=compute_80,code=sm_80 -std=c++17 --cudart shared -lcublas -Xcompiler=-fPIC" \
+             LIBS="-lrt" \
+             LDFLAGS="--cudart shared -L/srv/software/el8/x86_64/eb/OpenMPI/4.1.5-GCC-12.3.0/lib -lmpi -lcublas"
 
         cd Grid
-        make -j
+        make -j || { echo "Grid make failed"; exit 1; }
 fi
 
 if [ ! -f ${root}/lib/cgpt/build/cgpt.so ];
@@ -89,9 +92,13 @@ then
         # cgpt
         #
         cd ${root}/lib/cgpt
-        ./make ${root}/dependencies/Grid/build 16
+        ./make ${dep}/Grid/build 16 || { echo "cgpt make failed"; exit 1; }
 fi
 
 
 echo "To use:"
 echo "source ${root}/lib/cgpt/build/source.sh"
+
+
+
+
