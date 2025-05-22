@@ -7,9 +7,15 @@ EXPORT(Gauge_fix,{
     PyObject* _args;
     PyObject* _maxiter;
     PyObject* _prec;
+    PyObject* _fourier = Py_False; // add by Jinchen
+    PyObject* _orthog = PyLong_FromLong(-1); // default: -1 (Landau)
     PyObject* _ret;
 
-    if (!PyArg_ParseTuple(args, "OOO", &_args, &_maxiter, &_prec)) {
+    // if (!PyArg_ParseTuple(args, "OOO", &_args, &_maxiter, &_prec)) {
+    //   std::cout << "Error reading arguments" << std::endl;
+    //   return NULL;
+    // }
+    if (!PyArg_ParseTuple(args, "OOO|OO", &_args, &_maxiter, &_prec, &_fourier, &_orthog)) { // add by Jinchen
       std::cout << "Error reading arguments" << std::endl;
       return NULL;
     }
@@ -35,7 +41,15 @@ EXPORT(Gauge_fix,{
     cgpt_convert(_maxiter, maxiter);
     LatticeColourMatrixD xform1(grid);
 
-    FourierAcceleratedGaugeFixer<PeriodicGimplR>::SteepestDescentGaugeFix(U,xform1,alpha,maxiter,prec,prec,false,3);
+    // Fourier acceleration, add by Jinchen
+    bool use_fourier = PyObject_IsTrue(_fourier);
+    int orthog_dir;
+    cgpt_convert(_orthog, orthog_dir);
+
+    // FourierAcceleratedGaugeFixer<PeriodicGimplR>::SteepestDescentGaugeFix(U,xform1,alpha,maxiter,prec,prec,false,3);
+    FourierAcceleratedGaugeFixer<PeriodicGimplR>::SteepestDescentGaugeFix(
+      U, xform1, alpha, maxiter, prec, prec, use_fourier, orthog_dir
+    ); // add by Jinchen
 
     // Transfrom back to stuff that gpt can deal with
     std::vector< cgpt_Lattice_base* > U_prime(4);
